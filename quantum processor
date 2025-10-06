@@ -1,0 +1,246 @@
+import ast
+import hashlib
+import math
+import time
+import threading
+import queue
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+# ---------- Configurações ----------
+MAX_BITS = 4096            # limite de bits para simulação de tempo
+HUMAN_SCALE = 1e6          # multiplicador para modo observable
+GATE_TIME_SEC = 10e-9      # tempo por gate (s)
+DEFAULT_MODE = "observable"
+MAX_WORKERS = 4
+TASK_QUEUE_SIZE = 256
+
+# ---------- Funções permitidas ----------
+SAFE_FUNCS = {
+    'abs': abs, 'min': min, 'max': max, 'pow': pow, 'int': int, 'float': float,
+    'hex': hex, 'bin': bin, 'round': round, 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+    'sqrt': math.sqrt, 'log': math.log, 'log2': math.log2, 'log10': math.log10,
+    'ceil': math.ceil, 'floor': math.floor
+}
+
+def sha256(s: Any) -> str:
+    if isinstance(s, str):
+        b = s.encode('utf-8')
+    elif isinstance(s, bytes):
+        b = s
+    else:
+        b = str(s).encode('utf-8')
+    return hashlib.sha256(b).hexdigest()
+
+SAFE_FUNCS['sha256'] = sha256
+
+# ---------- SafeEval atualizado ----------
+class SafeEval(ast.NodeVisitor):
+    def __init__(self, allowed_names=None):
+        self.allowed_names = allowed_names or SAFE_FUNCS
+
+    def visit_Expression(self, node):
+        return self.visit(node.body)
+
+    def visit_Expr(self, node):
+        return self.visit(node.value)
+
+    def visit_Module(self, node):
+        if len(node.body) != 1:
+            raise ValueError("Apenas expressões únicas permitidas.")
+        return self.visit(node.body[0])
+
+    def visit_BinOp(self, node):
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        op = node.op
+
+        # suporte string * int
+        if isinstance(left, str) and isinstance(right, int) and isinstance(op, ast.Mult):
+            return left * right
+        if isinstance(right, str) and isinstance(left, int) and isinstance(op, ast.Mult):
+            return right * left
+
+        if isinstance(op, ast.Add): return left + right
+        if isinstance(op, ast.Sub): return left - right
+        if isinstance(op, ast.Mult): return left * right
+        if isinstance(op, ast.Div): return left / right
+        if isinstance(op, ast.FloorDiv): return left // right
+        if isinstance(op, ast.Mod): return left % right
+        if isinstance(op, ast.Pow): return pow(left, right)
+        raise ValueError(f"Operador binário não permitido: {type(op).__name__}")
+
+    def visit_UnaryOp(self, node):
+        operand = self.visit(node.operand)
+        if isinstance(node.op, ast.UAdd): return +operand
+        if isinstance(node.op, ast.USub): return -operand
+        raise ValueError(f"Operador unário não permitido: {type(node.op).__name__}")
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Name):
+            fname = node.func.id
+            if fname not in self.allowed_names:
+                raise ValueError(f"Função não permitida: {fname}")
+            func = self.allowed_names[fname]
+            args = [self.visit(a) for a in node.args]
+            return func(*args)
+        raise ValueError("Chamadas complexas não permitidas.")
+
+    def visit_Constant(self, node):
+        if isinstance(node.value, (int, float, str, bytes)):
+            return node.value
+        raise ValueError(f"Constante não permitida: {type(node.value).__name__}")
+
+    def visit_Num(self, node):
+        return node.n
+
+    def visit_Str(self, node):
+        return node.s
+
+    def visit_Name(self, node):
+        if node.id in ('pi', 'e'):
+            return getattr(math, node.id)
+        raise ValueError(f"Nome não permitido: {node.id}")
+
+    def visit_List(self, node):
+        return [self.visit(x) for x in node.elts]
+
+    def visit_Tuple(self, node):
+        return tuple(self.visit(x) for x in node.elts)
+
+    def generic_visit(self, node):
+        raise ValueError(f"Operação não permitida: {type(node).__name__}")
+
+# ---------- Heurísticas de tempo ----------
+def bit_length_of_obj(o: Any) -> int:
+    if isinstance(o, int): return o.bit_length() or 1
+    if isinstance(o, (str, bytes, bytearray)): return len(o.encode('utf-8'))*8 if isinstance(o,str) else len(o)*8
+    if isinstance(o, float): return 64
+    if isinstance(o, (list, tuple)): return sum(bit_length_of_obj(x) for x in o)
+    return 64
+
+def estimate_gate_count_for_operation(op_type: str, bit_n: int) -> int:
+    n = max(1, bit_n)
+    if op_type == 'add': return int(15 * n)
+    if op_type == 'mul': return int(20 * n * max(1, math.log2(max(2,n))))
+    if op_type == 'pow_mod': return int(120 * n * max(1, math.log2(max(2,n))))
+    if op_type == 'hash': return int(50 * n)
+    return int(10 * n)
+
+def estimate_time_for(op_type: str, bit_n: int, mode: str, scale: float) -> float:
+    gates = estimate_gate_count_for_operation(op_type, bit_n)
+    base = gates * GATE_TIME_SEC
+    return base*scale if mode=='real' else base*HUMAN_SCALE*scale
+
+# ---------- Task e fila ----------
+class Task:
+    def __init__(self, expr:str, mode:str, scale:float, task_id:int):
+        self.expr = expr
+        self.mode = mode
+        self.scale = scale
+        self.task_id = task_id
+        self.status = 'queued'
+        self.result = None
+        self.info = None
+        self.start_time = None
+        self.end_time = None
+
+task_queue = queue.Queue(maxsize=TASK_QUEUE_SIZE)
+task_counter = 0
+task_lock = threading.Lock()
+results = {}
+executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+
+def process_task(task: Task):
+    task.status = 'running'
+    task.start_time = time.time()
+    try:
+        node = ast.parse(task.expr, mode='eval')
+        se = SafeEval()
+        value = se.visit(node)
+    except Exception as e:
+        task.status = 'error'
+        task.result = None
+        task.info = f"Erro parsing/eval: {e}"
+        task.end_time = time.time()
+        return task
+
+    # detectar tipo de operação
+    bit_n = bit_length_of_obj(value)
+    tex = task.expr.lower()
+    if 'sha256' in tex: op_type='hash'
+    elif 'pow' in tex: op_type='pow_mod'
+    elif '*' in tex or '/' in tex: op_type='mul'
+    else: op_type='add'
+
+    t_sim = estimate_time_for(op_type, bit_n, task.mode, task.scale)
+    task.info = {'op_type': op_type, 'bit_n': bit_n, 'estimated_time_s': t_sim}
+    time.sleep(t_sim)
+    task.result = value
+    task.status = 'done'
+    task.end_time = time.time()
+    return task
+
+def worker_thread():
+    while True:
+        task = task_queue.get()
+        if task is None: break
+        fut = executor.submit(process_task, task)
+        res = fut.result()
+        results[task.task_id] = res
+        task_queue.task_done()
+
+dispatch_thread = threading.Thread(target=worker_thread, daemon=True)
+dispatch_thread.start()
+
+# ---------- REPL ----------
+def print_status():
+    print("Tarefas atuais:")
+    for tid, t in results.items():
+        elapsed = (time.time()-t.start_time) if t.start_time else 0
+        print(f" id={tid} status={t.status} elapsed={elapsed:.2f}s info={t.info}")
+
+def repl():
+    global task_counter
+    mode = DEFAULT_MODE
+    scale = 1.0
+    print("=== Quantum REPL Complex (simulado) ===")
+    print("Digite expressões (ex: 5+3, pow(2,65537,2**256), sha256('abc'))")
+    print("Comandos: scale <float>, mode real|observable, status, list, get <id>, exit")
+    while True:
+        try:
+            s = input(">>> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nSaindo.")
+            break
+        if not s: continue
+        parts = s.split()
+        cmd = parts[0].lower()
+        if cmd in ('exit','quit'):
+            break
+        if cmd == 'scale' and len(parts)==2:
+            try: scale=float(parts[1]); print("Scale ajustado:",scale)
+            except: print("Valor inválido"); continue
+        if cmd == 'mode' and len(parts)==2:
+            if parts[1] in ('real','observable'): mode=parts[1]; print("Modo:",mode)
+            else: print("Modo inválido"); continue
+        if cmd == 'status':
+            print_status(); continue
+        if cmd == 'list':
+            print("Tarefas enfileiradas:",list(results.keys())); continue
+        if cmd == 'get' and len(parts)==2:
+            tid=int(parts[1])
+            if tid in results: print(f"Resultado tarefa {tid}:",results[tid].result)
+            else: print("ID não encontrado"); continue
+
+        # Enfileira nova tarefa
+        with task_lock:
+            task_counter+=1
+            tid=task_counter
+        t = Task(expr=s, mode=mode, scale=scale, task_id=tid)
+        task_queue.put(t)
+        results[tid]=t
+        print(f"Tarefa enfileirada com id={tid}.")
+
+if __name__=="__main__":
+    repl()
