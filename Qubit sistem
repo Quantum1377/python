@@ -1,0 +1,154 @@
+# projeto1.py
+# Representação 3D animada de um qubit (Bloch sphere) + "espaço-tempo" simples
+# Requisitos: numpy, matplotlib
+# Execute: python projeto1.py
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # necessário para 3D matplotlib
+from matplotlib.animation import FuncAnimation
+
+# ---------- Parâmetros da simulação ----------
+frames = 300           # número de frames da animação
+interval = 30          # ms entre frames
+precession_freq = 2*np.pi * 0.5   # frequência de precessão (rad/s)
+extra_rot_speed = 2*np.pi * 0.15  # rotação adicional para variar trajeto
+worldline_speed = 0.02             # velocidade da posição no eixo x ao longo do tempo
+
+# ---------- Funções auxiliares ----------
+def bloch_vector(theta, phi):
+    """Retorna vetor bloch (x,y,z) dado theta (polar) e phi (azimute)."""
+    x = np.sin(theta) * np.cos(phi)
+    y = np.sin(theta) * np.sin(phi)
+    z = np.cos(theta)
+    return np.array([x, y, z])
+
+def rotation_about_z(vec, angle):
+    """Roda vetor 3D em torno do eixo z por 'angle' (rad)."""
+    R = np.array([
+        [ np.cos(angle), -np.sin(angle), 0],
+        [ np.sin(angle),  np.cos(angle), 0],
+        [ 0,              0,             1]
+    ])
+    return R @ vec
+
+# ---------- Criar figura e eixos ----------
+fig = plt.figure(figsize=(12, 6))
+
+# Eixo 3D: Bloch sphere
+ax_bloch = fig.add_subplot(1, 2, 1, projection='3d')
+ax_bloch.set_box_aspect((1,1,1))
+ax_bloch.set_title("Bloch Sphere (Qubit)")
+ax_bloch.set_xlim([-1.1, 1.1])
+ax_bloch.set_ylim([-1.1, 1.1])
+ax_bloch.set_zlim([-1.1, 1.1])
+ax_bloch.set_xlabel("X")
+ax_bloch.set_ylabel("Y")
+ax_bloch.set_zlabel("Z")
+
+# Eixo 3D: Espaço-tempo (x,t) representado em 3D para visualização
+ax_space = fig.add_subplot(1, 2, 2, projection='3d')
+ax_space.set_box_aspect((2,1,1))
+ax_space.set_title("Espaço–Tempo (x vs t) com estado do qubit")
+ax_space.set_xlim([0, frames*worldline_speed*1.1])
+ax_space.set_ylim([-0.5, 0.5])   # dimensão y apenas para visibilidade
+ax_space.set_zlim([0, frames*interval/1000.0*1.1])  # tempo em segundos
+ax_space.set_xlabel("x (posição)")
+ax_space.set_ylabel("y (offset visual)")
+ax_space.set_zlabel("t (tempo s)")
+
+# ---------- Desenhar a esfera de Bloch (superfície) ----------
+u = np.linspace(0, 2*np.pi, 60)
+v = np.linspace(0, np.pi, 30)
+x_sphere = np.outer(np.cos(u), np.sin(v))
+y_sphere = np.outer(np.sin(u), np.sin(v))
+z_sphere = np.outer(np.ones_like(u), np.cos(v))
+ax_bloch.plot_surface(x_sphere, y_sphere, z_sphere, alpha=0.12, linewidth=0)
+
+# Eixos cartesianos na esfera (linhas)
+ax_bloch.plot([-1.1,1.1],[0,0],[0,0], linewidth=0.8)
+ax_bloch.plot([0,0],[-1.1,1.1],[0,0], linewidth=0.8)
+ax_bloch.plot([0,0],[0,0],[-1.1,1.1], linewidth=0.8)
+
+# ---------- Elementos animáveis (inicial) ----------
+# Bloch vector (arrow)
+bloch_vec = np.array([0, 0, 1.0])
+arrow_quiver = ax_bloch.quiver(0,0,0, bloch_vec[0], bloch_vec[1], bloch_vec[2], 
+                               length=1.0, normalize=True)
+
+# Point on Bloch sphere tip (for highlight)
+point_on_sphere, = ax_bloch.plot([bloch_vec[0]], [bloch_vec[1]], [bloch_vec[2]], marker='o')
+
+# Espaço-tempo: worldline (line) e moving marker
+worldline_x = []
+worldline_y = []
+worldline_t = []
+worldline_line, = ax_space.plot([], [], [], linewidth=2)
+worldline_marker, = ax_space.plot([], [], [], marker='o', markersize=6)
+
+# Pequena legenda de estado (texto)
+state_text = ax_bloch.text2D(0.02, 0.92, "", transform=ax_bloch.transAxes)
+
+# ---------- Função de atualização do frame ----------
+def update(frame):
+    global arrow_quiver, point_on_sphere
+
+    t = frame * (interval / 1000.0)  # tempo em segundos
+
+    # Simular evolução do estado: escolha theta e phi variando com t
+    # Exemplo: precessão (phi cresce com precession_freq) e theta oscila lentamente
+    phi = precession_freq * t + 0.5 * np.sin(extra_rot_speed * t)
+    theta = 0.6 + 0.4 * np.sin(0.7 * t)   # oscila entre ≈0.2 e 1.0 rad
+
+    # Bloch vector no instante t
+    vec = bloch_vector(theta, phi)
+
+    # Atualiza o quiver (matplotlib quiver não tem método set_segments fácil,
+    # então recriamos o quiver no eixo: remover e redesenhar)
+    for coll in list(ax_bloch.collections) + list(ax_bloch.artists):
+        # tentativa leve de limpar apenas quivers/markers que adicionamos
+        pass
+    # Remove o arrow antigo (se existir)
+    try:
+        arrow_quiver.remove()
+    except Exception:
+        pass
+    arrow_quiver = ax_bloch.quiver(0,0,0, vec[0], vec[1], vec[2], length=1.0, normalize=True)
+
+    # Atualiza o ponto (tip)
+    point_on_sphere.set_data([vec[0]], [vec[1]])
+    point_on_sphere.set_3d_properties([vec[2]])
+
+    # Atualiza texto de estado (informa theta, phi)
+    state_text.set_text(f"theta={theta:.2f} rad\nphi={phi:.2f} rad\nframe={frame}")
+
+    # --- Espaço-tempo: construir worldline ---
+    x_pos = frame * worldline_speed
+    y_pos = 0.0
+    t_pos = t
+
+    worldline_x.append(x_pos)
+    worldline_y.append(y_pos)
+    worldline_t.append(t_pos)
+
+    worldline_line.set_data(worldline_x, worldline_y)
+    worldline_line.set_3d_properties(worldline_t)
+
+    # marcador que representa o qubit na linha de mundo: posiciona e dá aparência
+    worldline_marker.set_data([x_pos], [y_pos])
+    worldline_marker.set_3d_properties([t_pos])
+
+    # Também desenhar uma linha curta que indique orientação no espaço (proj do Bloch vector)
+    # Projeção do vetor bloch para o eixo x (simples efeito visual)
+    # (não removemos projetado antigo para simplificar)
+    return arrow_quiver, point_on_sphere, worldline_line, worldline_marker, state_text
+
+# ---------- Criar animação ----------
+anim = FuncAnimation(fig, update, frames=frames, interval=interval, blit=False)
+
+# ---------- Exibir / salvar ----------
+plt.tight_layout()
+plt.show()
+
+# Opcional: para salvar como mp4 (requer ffmpeg instalado)
+# anim.save('qubit_spacetime.mp4', fps=30, dpi=150)
