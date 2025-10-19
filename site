@@ -1,0 +1,282 @@
+// Next.js + Tailwind Starter (Dark, creative startup tech)
+// Project: abner-a-portfolio
+// Files below are concatenated for preview. Save each as its own file in a Next.js project.
+
+// package.json
+{
+  "name": "abner-a-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "axios": "1.5.0",
+    "clsx": "1.2.1",
+    "swr": "2.1.4",
+    "jsonwebtoken": "9.0.2"
+  },
+  "devDependencies": {
+    "autoprefixer": "10.4.14",
+    "postcss": "8.4.26",
+    "tailwindcss": "3.4.8",
+    "eslint": "8.46.0",
+    "eslint-config-next": "14.2.0"
+  }
+}
+
+// next.config.js
+/** @type {import('next').NextConfig} */
+const securityHeaders = [
+  {
+    key: 'X-Frame-Options',
+    value: 'DENY'
+  },
+  {
+    key: 'X-Content-Type-Options',
+    value: 'nosniff'
+  },
+  {
+    key: 'Referrer-Policy',
+    value: 'strict-origin-when-cross-origin'
+  },
+  {
+    key: 'X-XSS-Protection',
+    value: '1; mode=block'
+  },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload'
+  },
+  {
+    key: 'Permissions-Policy',
+    value: 'geolocation=(), microphone=()'
+  }
+]
+
+const nextConfig = {
+  reactStrictMode: true,
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: securityHeaders
+      }
+    ]
+  }
+}
+
+module.exports = nextConfig
+
+// tailwind.config.js
+module.exports = {
+  content: ['./pages/**/*.{js,ts,jsx,tsx}', './components/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        bg: '#07111a',
+        surface: '#0b1220',
+        accent: '#FFCC00'
+      }
+    }
+  },
+  plugins: []
+}
+
+// postcss.config.js
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {}
+  }
+}
+
+// pages/_app.js
+import '../styles/globals.css'
+import Head from 'next/head'
+
+export default function App({ Component, pageProps }) {
+  return (
+    <>
+      <Head>
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+      </Head>
+      <Component {...pageProps} />
+    </>
+  )
+}
+
+// styles/globals.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{
+  --bg:#07111a;
+  --surface:#0b1220;
+  --accent:#ffcc00;
+  --muted:#9aa8bd;
+}
+
+html,body,#__next{height:100%}
+body{background:linear-gradient(180deg,#071025 0%, #081228 40%);color:#e6eef8;font-family:Inter,system-ui,Arial,sans-serif}
+
+/* small utility */
+.container{max-width:1100px;margin:48px auto;padding:24px}
+
+// components/Header.js
+import Link from 'next/link'
+
+export default function Header(){
+  return (
+    <header className="flex items-center justify-between gap-6">
+      <div className="flex items-center gap-3">
+        <div className="w-14 h-14 rounded-lg bg-gradient-to-tr from-yellow-400 to-yellow-200 flex items-center justify-center text-black font-bold">AA</div>
+        <div>
+          <h1 className="text-xl font-semibold">Abner A. <span className="text-accent">| Full‑Stack</span></h1>
+          <p className="text-sm text-muted">Transformo ideias em produtos digitais que vendem</p>
+        </div>
+      </div>
+      <nav className="space-x-4 text-sm text-muted">
+        <Link href="#servicos">Serviços</Link>
+        <Link href="#portfolio">Portfólio</Link>
+        <Link href="#contato">Contato</Link>
+      </nav>
+    </header>
+  )
+}
+
+// components/Hero.js
+export default function Hero(){
+  return (
+    <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+      <div className="p-8 bg-surface rounded-xl shadow-lg">
+        <h2 className="text-3xl font-bold">Precisa de um site que realmente converta?</h2>
+        <p className="mt-4 text-muted">Sou Abner A., desenvolvedor full‑stack. Eu crio sites rápidos, escaláveis e otimizados para vendas — prontos para fazer seu negócio crescer.</p>
+        <div className="mt-6 flex gap-3">
+          <a href="https://wa.me/5511976602720" target="_blank" className="px-4 py-2 rounded-md font-semibold bg-gradient-to-r from-yellow-400 to-yellow-300 text-black">📲 Fale no WhatsApp</a>
+          <a href="#portfolio" className="px-4 py-2 rounded-md border border-white/10 text-muted">Ver portfólio</a>
+        </div>
+        <div className="mt-6 grid grid-cols-3 gap-3">
+          <div className="p-3 bg-[rgba(255,255,255,0.02)] rounded">50+ projetos</div>
+          <div className="p-3 bg-[rgba(255,255,255,0.02)] rounded">+32% conversão</div>
+          <div className="p-3 bg-[rgba(255,255,255,0.02)] rounded">2–6 semanas</div>
+        </div>
+      </div>
+      <div className="rounded-xl overflow-hidden shadow-xl">
+        <img src="/images/laptop1.jpg" alt="código" className="w-full h-full object-cover" />
+      </div>
+    </section>
+  )
+}
+
+// components/Services.js
+export default function Services(){
+  return (
+    <section id="servicos" className="mt-12">
+      <h3 className="text-2xl font-semibold">Como eu alavanco seu negócio</h3>
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-5 bg-surface rounded">Sites que vendem — UX + SEO</div>
+        <div className="p-5 bg-surface rounded">Integração de pagamentos</div>
+        <div className="p-5 bg-surface rounded">Arquitetura escalável</div>
+      </div>
+    </section>
+  )
+}
+
+// components/Portfolio.js
+export default function Portfolio(){
+  return (
+    <section id="portfolio" className="mt-12">
+      <h3 className="text-2xl font-semibold">Portfólio (destaques)</h3>
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 bg-surface rounded">Loja de eletrônicos — +28% conversão</div>
+        <div className="p-4 bg-surface rounded">SaaS — onboarding +42%</div>
+        <div className="p-4 bg-surface rounded">Institucional — SEO técnico</div>
+      </div>
+    </section>
+  )
+}
+
+// components/Contact.js
+export default function Contact(){
+  return (
+    <section id="contato" className="mt-12 p-6 bg-[rgba(255,255,255,0.02)] rounded-xl flex gap-6 items-center">
+      <div className="flex-1">
+        <h3 className="text-xl font-semibold">Vamos conversar?</h3>
+        <p className="text-muted">Envie mensagem no WhatsApp Business e vamos validar sua ideia sem compromisso.</p>
+        <a href="https://wa.me/5511976602720" target="_blank" className="inline-block mt-4 bg-green-500 px-4 py-2 rounded font-semibold">➡️ +55 11 97660-2720</a>
+      </div>
+      <div className="w-48">
+        <img src="/images/laptop2.jpg" alt="contato" className="rounded" />
+      </div>
+    </section>
+  )
+}
+
+// pages/index.js
+import Header from '../components/Header'
+import Hero from '../components/Hero'
+import Services from '../components/Services'
+import Portfolio from '../components/Portfolio'
+import Contact from '../components/Contact'
+
+export default function Home(){
+  return (
+    <main className="container">
+      <Header />
+      <Hero />
+      <Services />
+      <Portfolio />
+      <Contact />
+      <footer className="mt-12 text-muted text-sm">© Abner A. — Desenvolvedor Web Full‑Stack</footer>
+    </main>
+  )
+}
+
+// Public images (place the images you sent in public/images):
+// - public/images/laptop1.jpg
+// - public/images/laptop2.jpg
+// - public/images/bg1.jpg
+
+// --- SECURITY: middleware example (rate limiting + basic bot protection)
+// middleware.js (root)
+import { NextResponse } from 'next/server'
+import LRU from 'lru-cache'
+
+// simple in-memory limiter for preview/demo — replace with Redis for production
+const tokenCache = new LRU({ max: 500, ttl: 1000 * 60 })
+
+export function middleware(req) {
+  const ip = req.ip || req.headers.get('x-real-ip') || 'unknown'
+  const key = `rl:${ip}`
+  const current = tokenCache.get(key) || 0
+  if (current > 200) {
+    return new NextResponse('Too many requests', { status: 429 })
+  }
+  tokenCache.set(key, current + 1)
+  return NextResponse.next()
+}
+
+export const config = { matcher: '/api/:path*' }
+
+// --- API example (contact lead) pages/api/contact.js
+import rateLimit from 'express-rate-limit'
+
+// NOTE: Next.js API routes run on Node; this is an illustrative example.
+export default async function handler(req, res){
+  if (req.method !== 'POST') return res.status(405).end()
+  // Basic validation
+  const { name, message, phone } = req.body
+  if (!name || !message) return res.status(400).json({ error: 'Missing fields' })
+  // Here you'd sanitize inputs and store lead in DB with parameterized queries
+  // Return success (in production, add recaptcha verification server-side)
+  return res.status(200).json({ ok: true })
+}
+
