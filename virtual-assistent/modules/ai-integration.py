@@ -17,7 +17,7 @@ def ask_ai_if_needed(prompt: str) -> str | None:
         completion = openai.ChatCompletion.create(
             model="gpt-4o-mini", # ou "gpt-4o" dependendo do seu acesso
             messages=[{"role":"user","content":prompt}],
-            max_tokens=1000,
+            max_tokens=1000000,
             temperature=0.6
         )
         return completion.choices[0].message.content.strip()
