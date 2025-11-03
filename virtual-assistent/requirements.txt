@@ -1,0 +1,5 @@
+SpeechRecognition==3.9.0
+pyttsx3==2.90
+pyaudio==0.2.11
+requests==2.31.0
+python-dotenv==1.0.0
