@@ -1,0 +1,6 @@
+{
+    "products": [
+        {"name": "SD Card 64GB", "stock": 20, "price": 50},
+        {"name": "SSD 240GB", "stock": 10, "price": 200}
+    ]
+}
