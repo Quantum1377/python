@@ -1,6 +1,30 @@
 {
-    "products": [
-        {"name": "SD Card 64GB", "stock": 20, "price": 50},
-        {"name": "SSD 240GB", "stock": 10, "price": 200}
-    ]
+  "products": [
+    {
+      "id": 1,
+      "name": "SD Card 64GB",
+      "category": "Storage",
+      "stock": 20,
+      "price": 50,
+      "supplier": "Kingston",
+      "tags": ["promo", "new"],
+      "description": "Cartão SD de alta velocidade",
+      "date_added": "2025-11-03",
+      "sales": [
+        {"date": "2025-10-25", "quantity": 2, "buyer": "Alice"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "SSD 240GB",
+      "category": "Storage",
+      "stock": 10,
+      "price": 200,
+      "supplier": "Samsung",
+      "tags": ["discount"],
+      "description": "SSD SATA rápido",
+      "date_added": "2025-11-01",
+      "sales": []
+    }
+  ]
 }
