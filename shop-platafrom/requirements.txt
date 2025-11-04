@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+alembic  # opcional
+pydantic
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+databases
+typing-extensions
