@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Imagens IA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 Gerador de Imagens com IA</h1>
+
+        <form method="POST">
+            <textarea name="prompt" placeholder="Descreva a imagem que você quer gerar..." required></textarea>
+            <button type="submit">Gerar Imagem</button>
+        </form>
+
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+        {% if generated_image %}
+            <h2>Resultado:</h2>
+            <img src="{{ url_for('static', filename='generated/' + generated_image.split('/')[-1]) }}" alt="Imagem Gerada">
+            <p><a href="{{ url_for('static', filename='generated/' + generated_image.split('/')[-1]) }}" download>Baixar imagem</a></p>
+        {% endif %}
+    </div>
+</body>
+</html>
