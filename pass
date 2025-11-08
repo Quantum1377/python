@@ -1,0 +1,107 @@
+import fastf1
+from fastf1 import plotting
+from matplotlib import pyplot as plt
+import math
+
+# ===== CONFIGURAÇÕES =====
+ANO = 2025
+GP = 'Brasil'
+SESSAO = 'R'              # 'R' = corrida, 'Q' = qualificação, 'S' = treino
+PILOTOS = ['VER', 'NOR']  # Coloque os códigos dos pilotos. [] = todos os pilotos
+MAX_SUBPLOTS_PER_PAGE = 9  # Máximo de gráficos por página
+
+# ===== CARREGA SESSÃO =====
+print(f"🔄 Carregando dados da sessão {GP} {ANO} ({SESSAO})...")
+session = fastf1.get_session(ANO, GP, SESSAO)
+session.load()
+
+# ===== CONFIGURAÇÃO DO MATPLOTLIB =====
+plotting.setup_mpl()
+
+# ===== TODAS AS VARIÁVEIS DE TELEMETRIA POSSÍVEIS =====
+telemetry_vars = [
+    'Speed', 'nGear', 'RPM', 'Throttle', 'Brake', 'Steer',
+    'gLong', 'gLat',
+    'DRS', 'DRSRequested',
+    'BrakeBias', 'FuelLevel',
+    'ERSTotalEnergy', 'ERSBatteryStore', 'ERSDeployMode',
+    'TyreTempFL', 'TyreTempFR', 'TyreTempRL', 'TyreTempRR',
+    'TyrePressureFL', 'TyrePressureFR', 'TyrePressureRL', 'TyrePressureRR',
+    'BrakeTempFL', 'BrakeTempFR', 'BrakeTempRL', 'BrakeTempRR',
+    'BrakeTempCyl1', 'BrakeTempCyl2', 'BrakeTempCyl3', 'BrakeTempCyl4', 'BrakeTempCyl5',
+    'BrakeTempCenter',
+    'FuelFlow', 'BatteryTemperature', 'Clutch',
+    'SuspensionPositionFL', 'SuspensionPositionFR', 'SuspensionPositionRL', 'SuspensionPositionRR',
+    'SteerSpeed', 'Distance'
+]
+
+# ===== PILOTOS =====
+pilotos = PILOTOS if PILOTOS else session.drivers
+
+# ===== COLETA TELEMETRIA DE CADA PILOTO =====
+pilot_data = {}
+for driver in pilotos:
+    driver_laps = session.laps.pick_driver(driver)
+    
+    # Escolhe a primeira volta com telemetria disponível
+    lap = None
+    for l in driver_laps.iterlaps():
+        try:
+            data = l[1].get_car_data()
+            if not data.empty:
+                lap = l[1]
+                break
+        except Exception:
+            continue
+    
+    if lap is None:
+        print(f"⚠️ Nenhuma telemetria disponível para {driver}")
+        continue
+    
+    pilot_data[driver] = lap.get_car_data().add_distance()
+
+if not pilot_data:
+    print("⚠️ Nenhum piloto com telemetria disponível. Encerrando script.")
+    exit()
+
+# ===== IDENTIFICA VARIÁVEIS DISPONÍVEIS EM TODOS OS PILOTOS =====
+available_vars = []
+for var in telemetry_vars:
+    for driver in pilot_data:
+        if var in pilot_data[driver].columns:
+            available_vars.append(var)
+            break  # se pelo menos um piloto tem a variável, incluímos
+if not available_vars:
+    print("⚠️ Nenhuma variável de telemetria disponível para os pilotos selecionados.")
+    exit()
+
+# ===== PAGINAÇÃO =====
+pages = [available_vars[i:i+MAX_SUBPLOTS_PER_PAGE] for i in range(0, len(available_vars), MAX_SUBPLOTS_PER_PAGE)]
+
+# ===== PLOTAGEM =====
+for page_num, vars_page in enumerate(pages, 1):
+    rows = math.ceil(len(vars_page)/3)
+    fig, axes = plt.subplots(rows, 3, figsize=(6*3, 4*rows), constrained_layout=True)
+    axes = axes.flatten()
+    
+    for i, var in enumerate(vars_page):
+        plotted = False
+        for driver in pilot_data:
+            if var in pilot_data[driver].columns:
+                axes[i].plot(pilot_data[driver]['Distance'], pilot_data[driver][var], label=driver)
+                plotted = True
+        axes[i].set_ylabel(var)
+        axes[i].grid(True)
+        if plotted:
+            axes[i].legend(fontsize=8)
+    
+    # Remove subplots extras vazios
+    for j in range(len(vars_page), len(axes)):
+        fig.delaxes(axes[j])
+    
+    axes[-1].set_xlabel('Distância (m)')
+    fig.suptitle(f'Telemetria – GP {GP} {ANO} ({SESSAO}) – Página {page_num}', fontsize=16)
+    
+    # Exibe a figura
+    plt.show()
+
